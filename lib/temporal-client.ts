@@ -37,17 +37,39 @@ export function getTaskQueue(): string {
   return TASK_QUEUE;
 }
 
+/**
+ * Resolve the workflow bundle path. Prefers the bundle shipped with the
+ * claude-tempo package, falls back to a local workflow-bundle.js.
+ */
+function resolveWorkflowBundle(): string {
+  // Try the bundle from the installed claude-tempo package
+  try {
+    const pkgEntry = require.resolve('claude-tempo');
+    const pkgBundlePath = path.join(pkgEntry, '..', '..', 'workflow-bundle.js');
+    if (fs.existsSync(pkgBundlePath)) {
+      return pkgBundlePath;
+    }
+  } catch {
+    // claude-tempo not installed or resolvable — fall through
+  }
+
+  // Fallback: local workflow-bundle.js (built via npm run build:workflows)
+  const localPath = path.resolve(process.cwd(), 'workflow-bundle.js');
+  if (fs.existsSync(localPath)) {
+    return localPath;
+  }
+
+  throw new Error(
+    'Workflow bundle not found. Either install claude-tempo or run npm run build:workflows.'
+  );
+}
+
 export async function ensureWorkerRunning(): Promise<void> {
   if (globalThis.__temporal_worker__) {
     return;
   }
 
-  const bundlePath = path.resolve(process.cwd(), 'workflow-bundle.js');
-  if (!fs.existsSync(bundlePath)) {
-    throw new Error(
-      `Workflow bundle not found at ${bundlePath}. Run npm run build:workflows first.`
-    );
-  }
+  const bundlePath = resolveWorkflowBundle();
 
   const connection = await NativeConnection.connect({
     address: TEMPORAL_ADDRESS,
