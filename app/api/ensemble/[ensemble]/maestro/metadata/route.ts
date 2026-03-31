@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getTemporalClient } from '@/lib/temporal-client';
-import { sessionWorkflowId } from '@/lib/tempo-config';
-import { getMetadataQuery } from '@/lib/tempo-signals';
-import type { SessionMetadata } from '@/lib/tempo-types';
+import { sessionWorkflowId } from 'claude-tempo/config';
+import { getMetadataQuery } from 'claude-tempo/signals';
+import type { SessionMetadata } from 'claude-tempo/types';
 
 export async function GET(
   _request: Request,

@@ -6,9 +6,9 @@ import type {
   SessionInput,
   Message,
   SentMessage,
-} from './tempo-types';
-import { sessionWorkflowId } from './tempo-config';
-import { spawnInTerminal } from './tempo-spawn';
+} from 'claude-tempo/types';
+import { sessionWorkflowId } from 'claude-tempo/config';
+import { spawnInTerminal } from 'claude-tempo/spawn';
 import {
   receiveMessageSignal,
   recordSentMessageSignal,
@@ -19,7 +19,7 @@ import {
   pendingMessagesQuery,
   allMessagesQuery,
   allSentMessagesQuery,
-} from './tempo-signals';
+} from 'claude-tempo/signals';
 import { getTemporalClient, getTaskQueue } from './temporal-client';
 
 // ── Helpers ──
