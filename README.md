@@ -18,6 +18,8 @@ Maestro is the human interface for claude-tempo. It provides:
 - [Temporal](https://docs.temporal.io/cli) dev server running
 - [claude-tempo](https://github.com/vinceblank/claude-tempo) MCP server installed and configured
 
+Maestro depends on the `claude-tempo` npm package (^0.1.3+) for shared types, signal/query definitions, config helpers, spawn utilities, and the pre-built workflow bundle.
+
 ### Setting up claude-tempo
 
 Maestro requires a running Temporal server and the claude-tempo MCP server. The fastest way:
@@ -44,12 +46,11 @@ See the [claude-tempo README](https://github.com/vinceblank/claude-tempo) for fu
 git clone https://github.com/vinceblank/maestro.git
 cd maestro && npm install
 
-# Build the workflow bundle (required first time)
-npm run build:workflows
-
 # Start the dashboard
 npm run dev
 ```
+
+The workflow bundle is included in the `claude-tempo` package and resolved automatically at startup. The `build:workflows` script is only needed if you're developing against a local copy of the workflow source files.
 
 Open [http://localhost:3000](http://localhost:3000) to see the dashboard.
 
@@ -57,7 +58,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the dashboard.
 
 ### Architecture
 
-Maestro is a Next.js app that connects directly to Temporal to query and signal player workflows. It doesn't run its own backend — it uses Temporal as the data layer.
+Maestro is a Next.js app that connects directly to Temporal to query and signal player workflows. It doesn't run its own backend — it uses Temporal as the data layer. Types, signal/query definitions, config helpers, and terminal spawn logic are all imported from the `claude-tempo` package (single source of truth).
 
 ```
 Browser → Next.js API Routes → Temporal Client → Player Workflows
@@ -71,13 +72,15 @@ Browser → Next.js API Routes → Temporal Client → Player Workflows
 
 ### Workflow bundle
 
-Maestro includes a copy of the claude-tempo workflow source files in `workflows/`. These are compiled into `workflow-bundle.js` which the dashboard's Temporal worker uses to serve queries and signals.
+The workflow bundle (`workflow-bundle.js`) is shipped inside the `claude-tempo` npm package and resolved automatically at startup. Maestro's Temporal worker loads this bundle to serve workflow queries and signals.
 
-If the workflow protocol changes in claude-tempo, update the files in `workflows/` and rebuild:
+If the workflow protocol changes upstream, update `claude-tempo` to the latest version:
 
 ```bash
-npm run build:workflows
+npm update claude-tempo
 ```
+
+A local `workflows/` directory and `build:workflows` script are kept as a fallback for development against unreleased workflow changes.
 
 ## Development
 
@@ -107,4 +110,5 @@ TEMPORAL_ADDRESS=localhost:7233
 - **Framework**: [Next.js](https://nextjs.org/) 16+ (App Router)
 - **UI**: [shadcn/ui](https://ui.shadcn.com/) + [Tailwind CSS](https://tailwindcss.com/)
 - **Temporal**: [@temporalio/client](https://docs.temporal.io/) for workflow queries and signals
+- **Shared logic**: [claude-tempo](https://github.com/vinceblank/claude-tempo) — types, Temporal signals, config helpers, and cross-platform terminal spawning
 - **Icons**: [Lucide](https://lucide.dev/) via lucide-react
