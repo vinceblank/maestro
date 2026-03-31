@@ -30,6 +30,12 @@ export async function getTemporalClient(): Promise<Client> {
   });
 
   globalThis.__temporal_client__ = client;
+
+  // Auto-start the worker so workflow queries can be served
+  ensureWorkerRunning().catch((err) => {
+    console.error('[temporal-client] Failed to start worker:', err);
+  });
+
   return client;
 }
 
