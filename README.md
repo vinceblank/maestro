@@ -107,4 +107,4 @@ TEMPORAL_ADDRESS=localhost:7233
 - **Framework**: [Next.js](https://nextjs.org/) 16+ (App Router)
 - **UI**: [shadcn/ui](https://ui.shadcn.com/) + [Tailwind CSS](https://tailwindcss.com/)
 - **Temporal**: [@temporalio/client](https://docs.temporal.io/) for workflow queries and signals
-- **Icons**: Custom SVG orchestra instrument icons
+- **Icons**: [Lucide](https://lucide.dev/) via lucide-react
