@@ -11,8 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { UserPlus } from "lucide-react";
-
-type AgentType = 'claude' | 'copilot';
+import type { AgentType } from "@/lib/ui-types";
 
 interface RecruitDialogProps {
   onRecruit: (data: {

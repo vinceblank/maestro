@@ -14,7 +14,8 @@ export async function POST(
         { status: 400 },
       );
     }
-    const result = await recruitPlayer(ensemble, workDir, name, initialMessage, isConductor, agent);
+    const validAgent = agent === 'copilot' ? 'copilot' : 'claude';
+    const result = await recruitPlayer(ensemble, workDir, name, initialMessage, isConductor, validAgent);
     return NextResponse.json({ message: result });
   } catch (err) {
     return NextResponse.json(

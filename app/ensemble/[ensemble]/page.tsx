@@ -19,8 +19,7 @@ import { useMaestroMetadata } from "@/hooks/useMaestroMetadata";
 import { useConductorStatus } from "@/hooks/useConductorStatus";
 import { usePlayerDetail } from "@/hooks/usePlayerDetail";
 import type { Message, SentMessage } from "@/lib/tempo-types";
-
-type AgentType = 'claude' | 'copilot';
+import type { AgentType } from "@/lib/ui-types";
 
 type TimelineEntry =
   | { direction: "inbound"; message: Message }
@@ -43,6 +42,7 @@ export default function EnsemblePage({
   const conductorId = conductorStatus?.conductorId ?? null;
   const [pendingMessages, setPendingMessages] = useState<SentMessage[]>([]);
   const [conductorAgent, setConductorAgent] = useState<AgentType>('claude');
+  const [startingConductor, setStartingConductor] = useState(false);
   const scrollEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch selected player's messages when a player is selected
@@ -339,6 +339,7 @@ export default function EnsemblePage({
                 <select
                   value={conductorAgent}
                   onChange={(e) => setConductorAgent(e.target.value as AgentType)}
+                  aria-label="Select agent type"
                   className="h-8 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <option value="claude">Claude Code</option>
@@ -347,15 +348,21 @@ export default function EnsemblePage({
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={startingConductor}
                   onClick={async () => {
-                    await fetch(`/api/ensemble/${encodeURIComponent(ensemble)}/recruit`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ name: `${ensemble}-conductor`, workDir: maestroMetadata?.workDir ?? "", isConductor: true, agent: conductorAgent }),
-                    });
+                    setStartingConductor(true);
+                    try {
+                      await fetch(`/api/ensemble/${encodeURIComponent(ensemble)}/recruit`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ name: `${ensemble}-conductor`, workDir: maestroMetadata?.workDir ?? "", isConductor: true, agent: conductorAgent }),
+                      });
+                    } finally {
+                      setStartingConductor(false);
+                    }
                   }}
                 >
-                  Start Conductor
+                  {startingConductor ? "Starting..." : "Start Conductor"}
                 </Button>
               </div>
             </div>
