@@ -299,13 +299,6 @@ export async function recruitPlayer(
 
   // Spawn session — strategy depends on agent type
   if (agent === 'copilot') {
-    try {
-      require.resolve('@github/copilot-sdk');
-    } catch {
-      throw new Error(
-        'GitHub Copilot SDK not installed. Run: npm install @github/copilot-sdk'
-      );
-    }
     const temporalAddress = process.env[ENV.TEMPORAL_ADDRESS] ?? 'localhost:7233';
     spawnCopilotBridge({
       name,
