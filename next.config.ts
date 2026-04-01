@@ -8,7 +8,6 @@ const nextConfig: NextConfig = {
     'claude-tempo/config',
     'claude-tempo/spawn',
     'claude-tempo/signals',
-    'claude-tempo/workflow-bundle',
   ],
 };
 
