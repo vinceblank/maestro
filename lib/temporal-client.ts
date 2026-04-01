@@ -49,15 +49,11 @@ export function getTaskQueue(): string {
  * claude-tempo package, falls back to a local workflow-bundle.js.
  */
 function resolveWorkflowBundle(): string {
-  // Try the bundle from the installed claude-tempo package
+  // Try the bundle exported by the claude-tempo package
   try {
-    const pkgJsonPath = require.resolve('claude-tempo/package.json');
-    const pkgBundlePath = path.join(path.dirname(pkgJsonPath), 'workflow-bundle.js');
-    if (fs.existsSync(pkgBundlePath)) {
-      return pkgBundlePath;
-    }
+    return require.resolve('claude-tempo/workflow-bundle');
   } catch {
-    // claude-tempo not installed or resolvable — fall through
+    // claude-tempo not installed or bundle not available — fall through
   }
 
   // Fallback: local workflow-bundle.js (built via npm run build:workflows)
