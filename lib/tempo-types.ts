@@ -1,6 +1,10 @@
-// Re-export types from the parent project.
-// These are inlined to avoid Turbopack ESM/CJS module format conflicts
-// when resolving files under the parent package.json ("type": "commonjs").
+// Re-export types from the claude-tempo package.
+// These are kept as inlined interfaces because client components import them,
+// and Turbopack resolves the full claude-tempo package graph (including
+// @temporalio/workflow native modules) even for type-only imports, which
+// causes dev compilation to hang.
+//
+// These MUST stay in sync with claude-tempo/types.
 
 export interface SessionMetadata {
   playerId: string;

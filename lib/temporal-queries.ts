@@ -1,16 +1,26 @@
 import 'server-only';
 import { Client, WorkflowHandle } from '@temporalio/client';
 import { WorkflowIdConflictPolicy } from '@temporalio/client';
-import { spawn } from 'child_process';
 import type {
   SessionMetadata,
   SessionInput,
   Message,
   SentMessage,
-} from './tempo-types';
-import { sessionWorkflowId } from './tempo-config';
+} from 'claude-tempo/types';
+import { sessionWorkflowId } from 'claude-tempo/config';
+import { spawnInTerminal } from 'claude-tempo/spawn';
+import {
+  receiveMessageSignal,
+  recordSentMessageSignal,
+  shutdownSignal,
+  markDeliveredSignal,
+  getMetadataQuery,
+  getPartQuery,
+  pendingMessagesQuery,
+  allMessagesQuery,
+  allSentMessagesQuery,
+} from 'claude-tempo/signals';
 import { getTemporalClient, getTaskQueue } from './temporal-client';
-import { SIGNALS, QUERIES } from './constants';
 
 // ── Helpers ──
 
@@ -30,7 +40,7 @@ async function resolveSession(
   for await (const wf of client.workflow.list({ query: fallbackQuery })) {
     try {
       const handle = client.workflow.getHandle(wf.workflowId);
-      const metadata: SessionMetadata = await handle.query(QUERIES.GET_METADATA);
+      const metadata: SessionMetadata = await handle.query(getMetadataQuery);
       if (metadata.playerId === playerName) {
         return handle;
       }
@@ -55,8 +65,8 @@ export async function listPlayers(
     try {
       const handle = client.workflow.getHandle(wf.workflowId);
       const [metadata, part] = await Promise.all([
-        handle.query(QUERIES.GET_METADATA) as Promise<SessionMetadata>,
-        handle.query(QUERIES.GET_PART) as Promise<string>,
+        handle.query(getMetadataQuery) as Promise<SessionMetadata>,
+        handle.query(getPartQuery) as Promise<string>,
       ]);
       players.push({ metadata, part });
     } catch {
@@ -79,7 +89,7 @@ export async function sendMessage(
   if (!handle) {
     throw new Error(`Player "${playerId}" not found in ensemble "${ensemble}"`);
   }
-  await handle.signal(SIGNALS.RECEIVE_MESSAGE, { from, text });
+  await handle.signal(receiveMessageSignal, { from, text });
 }
 
 export async function terminatePlayer(
@@ -91,7 +101,7 @@ export async function terminatePlayer(
   if (!handle) {
     throw new Error(`Player "${playerId}" not found in ensemble "${ensemble}"`);
   }
-  await handle.signal(SIGNALS.SHUTDOWN);
+  await handle.signal(shutdownSignal);
   await handle.terminate();
 }
 
@@ -103,7 +113,7 @@ export async function disbandEnsemble(ensemble: string): Promise<number> {
   for await (const wf of client.workflow.list({ query })) {
     try {
       const handle = client.workflow.getHandle(wf.workflowId);
-      await handle.signal(SIGNALS.SHUTDOWN);
+      await handle.signal(shutdownSignal);
       await handle.terminate();
       count++;
     } catch {
@@ -165,15 +175,15 @@ export async function getMaestroMessages(ensemble: string): Promise<{
     const handle = client.workflow.getHandle(workflowId);
     let messages: Message[];
     try {
-      messages = await handle.query(QUERIES.ALL_MESSAGES) as Message[];
+      messages = await handle.query(allMessagesQuery) as Message[];
     } catch {
-      messages = await handle.query(QUERIES.PENDING_MESSAGES) as Message[];
+      messages = await handle.query(pendingMessagesQuery) as Message[];
     }
     // Auto-mark undelivered messages as delivered (maestro has no listener)
     const undeliveredIds = messages.filter((m) => !m.delivered).map((m) => m.id);
     if (undeliveredIds.length > 0) {
       try {
-        await handle.signal(SIGNALS.MARK_DELIVERED, undeliveredIds);
+        await handle.signal(markDeliveredSignal, undeliveredIds);
       } catch {
         // Best-effort
       }
@@ -181,7 +191,7 @@ export async function getMaestroMessages(ensemble: string): Promise<{
 
     let sentMessages: SentMessage[];
     try {
-      sentMessages = await handle.query(QUERIES.ALL_SENT_MESSAGES) as SentMessage[];
+      sentMessages = await handle.query(allSentMessagesQuery) as SentMessage[];
     } catch {
       sentMessages = [];
     }
@@ -201,13 +211,13 @@ export async function sendAsMaestro(
   if (!targetHandle) {
     throw new Error(`Player "${targetPlayerId}" not found`);
   }
-  await targetHandle.signal(SIGNALS.RECEIVE_MESSAGE, { from: 'maestro', text });
+  await targetHandle.signal(receiveMessageSignal, { from: 'maestro', text });
 
   // Record outbound on maestro's workflow
   const maestroId = sessionWorkflowId(ensemble, 'maestro');
   try {
     const maestroHandle = client.workflow.getHandle(maestroId);
-    await maestroHandle.signal(SIGNALS.RECORD_SENT_MESSAGE, { to: targetPlayerId, text });
+    await maestroHandle.signal(recordSentMessageSignal, { to: targetPlayerId, text });
   } catch {
     // Maestro workflow may not exist yet
   }
@@ -228,21 +238,21 @@ export async function getPlayerDetail(
     throw new Error(`Player "${playerId}" not found in ensemble "${ensemble}"`);
   }
   const [metadata, part] = await Promise.all([
-    handle.query(QUERIES.GET_METADATA) as Promise<SessionMetadata>,
-    handle.query(QUERIES.GET_PART) as Promise<string>,
+    handle.query(getMetadataQuery) as Promise<SessionMetadata>,
+    handle.query(getPartQuery) as Promise<string>,
   ]);
 
   // Try allMessages first (full history), fall back to pendingMessages (older workflows)
   let messages: Message[];
   try {
-    messages = await handle.query(QUERIES.ALL_MESSAGES) as Message[];
+    messages = await handle.query(allMessagesQuery) as Message[];
   } catch {
-    messages = await handle.query(QUERIES.PENDING_MESSAGES) as Message[];
+    messages = await handle.query(pendingMessagesQuery) as Message[];
   }
 
   let sentMessages: SentMessage[];
   try {
-    sentMessages = await handle.query(QUERIES.ALL_SENT_MESSAGES) as SentMessage[];
+    sentMessages = await handle.query(allSentMessagesQuery) as SentMessage[];
   } catch {
     sentMessages = [];
   }
@@ -283,24 +293,19 @@ export async function recruitPlayer(
     existingIds.add(wf.workflowId);
   }
 
-  // Spawn new Claude Code session
-  const spawnArgs = [
+  // Spawn new Claude Code session using claude-tempo's terminal spawner
+  const claudeArgs = [
     '--dangerously-skip-permissions',
     '--dangerously-load-development-channels', 'server:claude-tempo',
     '-n', `"${name}"`,
   ];
-  const child = spawn('claude', spawnArgs, {
-    cwd: workDir,
-    detached: true,
-    stdio: 'ignore',
-    shell: true,
-    env: {
-      ...process.env,
-      CLAUDE_TEMPO_ENSEMBLE: ensemble,
-      CLAUDE_TEMPO_CONDUCTOR: isConductor ? 'true' : '',
-    },
-  });
-  child.unref();
+  const envVars: Record<string, string> = {
+    CLAUDE_TEMPO_ENSEMBLE: ensemble,
+  };
+  if (isConductor) {
+    envVars.CLAUDE_TEMPO_CONDUCTOR = 'true';
+  }
+  spawnInTerminal(claudeArgs, workDir, envVars);
 
   // Poll for the new workflow (up to ~15s)
   let newWorkflowId: string | null = null;
@@ -326,7 +331,7 @@ export async function recruitPlayer(
     ? `${nameInstruction}\n\nThen: ${initialMessage}`
     : nameInstruction;
 
-  await newHandle.signal(SIGNALS.RECEIVE_MESSAGE, { from: 'maestro', text: fullMessage });
+  await newHandle.signal(receiveMessageSignal, { from: 'maestro', text: fullMessage });
 
   // Notify conductor that maestro recruited a new player
   if (!isConductor) {
@@ -335,7 +340,7 @@ export async function recruitPlayer(
       const conductorHandle = await resolveSession(client, ensemble, conductor);
       if (conductorHandle) {
         try {
-          await conductorHandle.signal(SIGNALS.RECEIVE_MESSAGE, {
+          await conductorHandle.signal(receiveMessageSignal, {
             from: 'maestro',
             text: `Recruited new player "${name}" in ${workDir}.${initialMessage ? ` Task: ${initialMessage}` : ''}`,
           });
