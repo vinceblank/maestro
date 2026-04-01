@@ -8,7 +8,6 @@ import type {
   SentMessage,
 } from 'claude-tempo/types';
 import { sessionWorkflowId } from 'claude-tempo/config';
-// @ts-expect-error — spawnCopilotBridge exported by claude-tempo@0.2.1+ (not yet published)
 import { spawnInTerminal, spawnCopilotBridge } from 'claude-tempo/spawn';
 import {
   receiveMessageSignal,
@@ -21,9 +20,10 @@ import {
   allMessagesQuery,
   allSentMessagesQuery,
 } from 'claude-tempo/signals';
+import type { AgentType } from 'claude-tempo/types';
 import { getTemporalClient, getTaskQueue } from './temporal-client';
 
-export type AgentType = 'claude' | 'copilot';
+export type { AgentType } from 'claude-tempo/types';
 
 // ── Helpers ──
 
