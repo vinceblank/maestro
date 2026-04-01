@@ -7,7 +7,7 @@ import type {
   Message,
   SentMessage,
 } from 'claude-tempo/types';
-import { sessionWorkflowId } from 'claude-tempo/config';
+import { sessionWorkflowId, ENV } from 'claude-tempo/config';
 import { spawnInTerminal, spawnCopilotBridge } from 'claude-tempo/spawn';
 import {
   receiveMessageSignal,
@@ -299,7 +299,7 @@ export async function recruitPlayer(
 
   // Spawn session — strategy depends on agent type
   if (agent === 'copilot') {
-    const temporalAddress = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
+    const temporalAddress = process.env[ENV.TEMPORAL_ADDRESS] ?? 'localhost:7233';
     spawnCopilotBridge({
       name,
       ensemble,
@@ -314,10 +314,10 @@ export async function recruitPlayer(
       '-n', `"${name}"`,
     ];
     const envVars: Record<string, string> = {
-      CLAUDE_TEMPO_ENSEMBLE: ensemble,
+      [ENV.ENSEMBLE]: ensemble,
     };
     if (isConductor) {
-      envVars.CLAUDE_TEMPO_CONDUCTOR = 'true';
+      envVars[ENV.CONDUCTOR] = 'true';
     }
     spawnInTerminal(claudeArgs, workDir, envVars);
   }

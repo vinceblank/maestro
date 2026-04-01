@@ -2,10 +2,11 @@ import { Connection, Client } from '@temporalio/client';
 import { Worker, NativeConnection } from '@temporalio/worker';
 import * as path from 'path';
 import * as fs from 'fs';
+import { ENV } from 'claude-tempo/config';
 
-const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
-const TEMPORAL_NAMESPACE = process.env.TEMPORAL_NAMESPACE ?? 'default';
-const TASK_QUEUE = process.env.CLAUDE_TEMPO_TASK_QUEUE ?? 'claude-tempo';
+const TEMPORAL_ADDRESS = process.env[ENV.TEMPORAL_ADDRESS] ?? 'localhost:7233';
+const TEMPORAL_NAMESPACE = process.env[ENV.TEMPORAL_NAMESPACE] ?? 'default';
+const TASK_QUEUE = process.env[ENV.TASK_QUEUE] ?? 'claude-tempo';
 
 // Singleton cached on globalThis to survive HMR
 declare global {
