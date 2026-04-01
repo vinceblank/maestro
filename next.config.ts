@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
     '@temporalio/client',
     '@temporalio/worker',
     'claude-tempo',
-    'claude-tempo/types',
     'claude-tempo/config',
     'claude-tempo/spawn',
     'claude-tempo/signals',
