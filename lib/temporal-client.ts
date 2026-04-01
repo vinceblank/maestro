@@ -2,6 +2,7 @@ import { Connection, Client } from '@temporalio/client';
 import { Worker, NativeConnection } from '@temporalio/worker';
 import * as path from 'path';
 import * as fs from 'fs';
+import { createRequire } from 'module';
 import { ENV } from 'claude-tempo/config';
 
 const TEMPORAL_ADDRESS = process.env[ENV.TEMPORAL_ADDRESS] ?? 'localhost:7233';
@@ -49,9 +50,10 @@ export function getTaskQueue(): string {
  * claude-tempo package, falls back to a local workflow-bundle.js.
  */
 function resolveWorkflowBundle(): string {
-  // Try the bundle exported by the claude-tempo package
+  // Use createRequire to bypass Turbopack's static analysis of require.resolve
   try {
-    return require.resolve('claude-tempo/workflow-bundle');
+    const nodeRequire = createRequire(__filename);
+    return nodeRequire.resolve('claude-tempo/workflow-bundle');
   } catch {
     // claude-tempo not installed or bundle not available — fall through
   }
