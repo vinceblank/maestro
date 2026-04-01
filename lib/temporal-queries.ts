@@ -8,7 +8,8 @@ import type {
   SentMessage,
 } from 'claude-tempo/types';
 import { sessionWorkflowId } from 'claude-tempo/config';
-import { spawnInTerminal } from 'claude-tempo/spawn';
+// @ts-expect-error — spawnCopilotBridge exported by claude-tempo@0.2.1+ (not yet published)
+import { spawnInTerminal, spawnCopilotBridge } from 'claude-tempo/spawn';
 import {
   receiveMessageSignal,
   recordSentMessageSignal,
@@ -21,6 +22,8 @@ import {
   allSentMessagesQuery,
 } from 'claude-tempo/signals';
 import { getTemporalClient, getTaskQueue } from './temporal-client';
+
+export type AgentType = 'claude' | 'copilot';
 
 // ── Helpers ──
 
@@ -270,6 +273,7 @@ export async function recruitPlayer(
   name: string,
   initialMessage?: string,
   isConductor?: boolean,
+  agent: AgentType = 'claude',
 ): Promise<string> {
   // Validate name
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
@@ -293,19 +297,30 @@ export async function recruitPlayer(
     existingIds.add(wf.workflowId);
   }
 
-  // Spawn new Claude Code session using claude-tempo's terminal spawner
-  const claudeArgs = [
-    '--dangerously-skip-permissions',
-    '--dangerously-load-development-channels', 'server:claude-tempo',
-    '-n', `"${name}"`,
-  ];
-  const envVars: Record<string, string> = {
-    CLAUDE_TEMPO_ENSEMBLE: ensemble,
-  };
-  if (isConductor) {
-    envVars.CLAUDE_TEMPO_CONDUCTOR = 'true';
+  // Spawn session — strategy depends on agent type
+  if (agent === 'copilot') {
+    const temporalAddress = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
+    spawnCopilotBridge({
+      name,
+      ensemble,
+      temporalAddress,
+      isConductor: isConductor ?? false,
+      workDir,
+    });
+  } else {
+    const claudeArgs = [
+      '--dangerously-skip-permissions',
+      '--dangerously-load-development-channels', 'server:claude-tempo',
+      '-n', `"${name}"`,
+    ];
+    const envVars: Record<string, string> = {
+      CLAUDE_TEMPO_ENSEMBLE: ensemble,
+    };
+    if (isConductor) {
+      envVars.CLAUDE_TEMPO_CONDUCTOR = 'true';
+    }
+    spawnInTerminal(claudeArgs, workDir, envVars);
   }
-  spawnInTerminal(claudeArgs, workDir, envVars);
 
   // Poll for the new workflow (up to ~15s)
   let newWorkflowId: string | null = null;
