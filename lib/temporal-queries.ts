@@ -7,8 +7,8 @@ import type {
   Message,
   SentMessage,
 } from 'claude-tempo/types';
-import { sessionWorkflowId } from 'claude-tempo/config';
-import { spawnInTerminal } from 'claude-tempo/spawn';
+import { sessionWorkflowId, ENV } from 'claude-tempo/config';
+import { spawnInTerminal, spawnCopilotBridge } from 'claude-tempo/spawn';
 import {
   receiveMessageSignal,
   recordSentMessageSignal,
@@ -20,7 +20,10 @@ import {
   allMessagesQuery,
   allSentMessagesQuery,
 } from 'claude-tempo/signals';
+import type { AgentType } from 'claude-tempo/types';
 import { getTemporalClient, getTaskQueue } from './temporal-client';
+
+export type { AgentType } from 'claude-tempo/types';
 
 // ── Helpers ──
 
@@ -89,7 +92,8 @@ export async function sendMessage(
   if (!handle) {
     throw new Error(`Player "${playerId}" not found in ensemble "${ensemble}"`);
   }
-  await handle.signal(receiveMessageSignal, { from, text });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- isMaestro not yet in upstream types
+  await handle.signal(receiveMessageSignal, { from, text, isMaestro: true } as any);
 }
 
 export async function terminatePlayer(
@@ -211,7 +215,8 @@ export async function sendAsMaestro(
   if (!targetHandle) {
     throw new Error(`Player "${targetPlayerId}" not found`);
   }
-  await targetHandle.signal(receiveMessageSignal, { from: 'maestro', text });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- isMaestro not yet in upstream types
+  await targetHandle.signal(receiveMessageSignal, { from: 'maestro', text, isMaestro: true } as any);
 
   // Record outbound on maestro's workflow
   const maestroId = sessionWorkflowId(ensemble, 'maestro');
@@ -270,6 +275,7 @@ export async function recruitPlayer(
   name: string,
   initialMessage?: string,
   isConductor?: boolean,
+  agent: AgentType = 'claude',
 ): Promise<string> {
   // Validate name
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
@@ -293,19 +299,30 @@ export async function recruitPlayer(
     existingIds.add(wf.workflowId);
   }
 
-  // Spawn new Claude Code session using claude-tempo's terminal spawner
-  const claudeArgs = [
-    '--dangerously-skip-permissions',
-    '--dangerously-load-development-channels', 'server:claude-tempo',
-    '-n', `"${name}"`,
-  ];
-  const envVars: Record<string, string> = {
-    CLAUDE_TEMPO_ENSEMBLE: ensemble,
-  };
-  if (isConductor) {
-    envVars.CLAUDE_TEMPO_CONDUCTOR = 'true';
+  // Spawn session — strategy depends on agent type
+  if (agent === 'copilot') {
+    const temporalAddress = process.env[ENV.TEMPORAL_ADDRESS] ?? 'localhost:7233';
+    spawnCopilotBridge({
+      name,
+      ensemble,
+      temporalAddress,
+      isConductor: isConductor ?? false,
+      workDir,
+    });
+  } else {
+    const claudeArgs = [
+      '--dangerously-skip-permissions',
+      '--dangerously-load-development-channels', 'server:claude-tempo',
+      '-n', name,
+    ];
+    const envVars: Record<string, string> = {
+      [ENV.ENSEMBLE]: ensemble,
+    };
+    if (isConductor) {
+      envVars[ENV.CONDUCTOR] = 'true';
+    }
+    spawnInTerminal(claudeArgs, workDir, envVars);
   }
-  spawnInTerminal(claudeArgs, workDir, envVars);
 
   // Poll for the new workflow (up to ~15s)
   let newWorkflowId: string | null = null;
@@ -331,7 +348,8 @@ export async function recruitPlayer(
     ? `${nameInstruction}\n\nThen: ${initialMessage}`
     : nameInstruction;
 
-  await newHandle.signal(receiveMessageSignal, { from: 'maestro', text: fullMessage });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- isMaestro not yet in upstream types
+  await newHandle.signal(receiveMessageSignal, { from: 'maestro', text: fullMessage, isMaestro: true } as any);
 
   // Notify conductor that maestro recruited a new player
   if (!isConductor) {
@@ -340,10 +358,13 @@ export async function recruitPlayer(
       const conductorHandle = await resolveSession(client, ensemble, conductor);
       if (conductorHandle) {
         try {
+          /* eslint-disable @typescript-eslint/no-explicit-any -- isMaestro not yet in upstream types */
           await conductorHandle.signal(receiveMessageSignal, {
             from: 'maestro',
             text: `Recruited new player "${name}" in ${workDir}.${initialMessage ? ` Task: ${initialMessage}` : ''}`,
-          });
+            isMaestro: true,
+          } as any);
+          /* eslint-enable @typescript-eslint/no-explicit-any */
         } catch {
           // Conductor may not be accepting messages
         }

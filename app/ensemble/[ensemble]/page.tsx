@@ -19,6 +19,7 @@ import { useMaestroMetadata } from "@/hooks/useMaestroMetadata";
 import { useConductorStatus } from "@/hooks/useConductorStatus";
 import { usePlayerDetail } from "@/hooks/usePlayerDetail";
 import type { Message, SentMessage } from "@/lib/tempo-types";
+import type { AgentType } from "@/lib/ui-types";
 
 type TimelineEntry =
   | { direction: "inbound"; message: Message }
@@ -40,6 +41,8 @@ export default function EnsemblePage({
   const conductorActive = conductorStatus?.active ?? false;
   const conductorId = conductorStatus?.conductorId ?? null;
   const [pendingMessages, setPendingMessages] = useState<SentMessage[]>([]);
+  const [conductorAgent, setConductorAgent] = useState<AgentType>('claude');
+  const [startingConductor, setStartingConductor] = useState(false);
   const scrollEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch selected player's messages when a player is selected
@@ -162,7 +165,7 @@ export default function EnsemblePage({
   }, [activeTimeline]);
 
   const handleRecruit = useCallback(
-    async (data: { name: string; workDir: string; initialMessage?: string }) => {
+    async (data: { name: string; workDir: string; initialMessage?: string; agent?: AgentType }) => {
       await fetch(`/api/ensemble/${encodeURIComponent(ensemble)}/recruit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -332,19 +335,36 @@ export default function EnsemblePage({
           ) : (
             <div className="border-t border-border px-4 py-3 flex items-center justify-between bg-yellow-500/5">
               <span className="text-sm text-muted-foreground">No conductor is running</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  await fetch(`/api/ensemble/${encodeURIComponent(ensemble)}/recruit`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: `${ensemble}-conductor`, workDir: maestroMetadata?.workDir ?? "", isConductor: true }),
-                  });
-                }}
-              >
-                Start Conductor
-              </Button>
+              <div className="flex items-center gap-2">
+                <select
+                  value={conductorAgent}
+                  onChange={(e) => setConductorAgent(e.target.value as AgentType)}
+                  aria-label="Select agent type"
+                  className="h-8 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="claude">Claude Code</option>
+                  <option value="copilot">GitHub Copilot</option>
+                </select>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={startingConductor}
+                  onClick={async () => {
+                    setStartingConductor(true);
+                    try {
+                      await fetch(`/api/ensemble/${encodeURIComponent(ensemble)}/recruit`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ name: `${ensemble}-conductor`, workDir: maestroMetadata?.workDir ?? "", isConductor: true, agent: conductorAgent }),
+                      });
+                    } finally {
+                      setStartingConductor(false);
+                    }
+                  }}
+                >
+                  {startingConductor ? "Starting..." : "Start Conductor"}
+                </Button>
+              </div>
             </div>
           )}
         </div>

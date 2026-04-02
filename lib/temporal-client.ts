@@ -2,10 +2,11 @@ import { Connection, Client } from '@temporalio/client';
 import { Worker, NativeConnection } from '@temporalio/worker';
 import * as path from 'path';
 import * as fs from 'fs';
+import { ENV } from 'claude-tempo/config';
 
-const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
-const TEMPORAL_NAMESPACE = process.env.TEMPORAL_NAMESPACE ?? 'default';
-const TASK_QUEUE = process.env.CLAUDE_TEMPO_TASK_QUEUE ?? 'claude-tempo';
+const TEMPORAL_ADDRESS = process.env[ENV.TEMPORAL_ADDRESS] ?? 'localhost:7233';
+const TEMPORAL_NAMESPACE = process.env[ENV.TEMPORAL_NAMESPACE] ?? 'default';
+const TASK_QUEUE = process.env[ENV.TASK_QUEUE] ?? 'claude-tempo';
 
 // Singleton cached on globalThis to survive HMR
 declare global {
@@ -48,21 +49,27 @@ export function getTaskQueue(): string {
  * claude-tempo package, falls back to a local workflow-bundle.js.
  */
 function resolveWorkflowBundle(): string {
-  // Try the bundle from the installed claude-tempo package
-  try {
-    const pkgJsonPath = require.resolve('claude-tempo/package.json');
-    const pkgBundlePath = path.join(path.dirname(pkgJsonPath), 'workflow-bundle.js');
-    if (fs.existsSync(pkgBundlePath)) {
-      return pkgBundlePath;
-    }
-  } catch {
-    // claude-tempo not installed or resolvable — fall through
+  // Check local build first
+  const localBundle = path.join(process.cwd(), 'workflow-bundle.js');
+  if (fs.existsSync(localBundle)) return localBundle;
+
+  // Walk node_modules to find the installed package (no require.resolve — Turbopack rewrites it)
+  const candidates = [
+    path.join(process.cwd(), 'node_modules', 'claude-tempo', 'workflow-bundle.js'),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
   }
 
-  // Fallback: local workflow-bundle.js (built via npm run build:workflows)
-  const localPath = path.resolve(process.cwd(), 'workflow-bundle.js');
-  if (fs.existsSync(localPath)) {
-    return localPath;
+  // pnpm stores packages in .pnpm with version suffix — search for it
+  const pnpmDir = path.join(process.cwd(), 'node_modules', '.pnpm');
+  if (fs.existsSync(pnpmDir)) {
+    const entries = fs.readdirSync(pnpmDir).filter(e => e.startsWith('claude-tempo@'));
+    for (const entry of entries) {
+      const bundlePath = path.join(pnpmDir, entry, 'node_modules', 'claude-tempo', 'workflow-bundle.js');
+      if (fs.existsSync(bundlePath)) return bundlePath;
+    }
   }
 
   throw new Error(

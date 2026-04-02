@@ -11,12 +11,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { UserPlus } from "lucide-react";
+import type { AgentType } from "@/lib/ui-types";
 
 interface RecruitDialogProps {
   onRecruit: (data: {
     name: string;
     workDir: string;
     initialMessage?: string;
+    agent?: AgentType;
   }) => Promise<void>;
   defaultWorkDir?: string;
 }
@@ -25,6 +27,7 @@ export function RecruitDialog({ onRecruit, defaultWorkDir }: RecruitDialogProps)
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [workDir, setWorkDir] = useState(defaultWorkDir ?? "");
+  const [agent, setAgent] = useState<AgentType>("claude");
 
   useEffect(() => {
     if (defaultWorkDir && !workDir) {
@@ -43,15 +46,17 @@ export function RecruitDialog({ onRecruit, defaultWorkDir }: RecruitDialogProps)
         name: name.trim(),
         workDir: workDir.trim(),
         initialMessage: initialMessage.trim() || undefined,
+        agent,
       });
       setName("");
       setWorkDir("");
       setInitialMessage("");
+      setAgent("claude");
       setOpen(false);
     } finally {
       setSubmitting(false);
     }
-  }, [name, workDir, initialMessage, submitting, onRecruit]);
+  }, [name, workDir, initialMessage, agent, submitting, onRecruit]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -78,6 +83,25 @@ export function RecruitDialog({ onRecruit, defaultWorkDir }: RecruitDialogProps)
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. test-runner"
             />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="recruit-agent" className="text-sm font-medium">
+              Agent
+            </label>
+            <select
+              id="recruit-agent"
+              value={agent}
+              onChange={(e) => setAgent(e.target.value as AgentType)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="claude">Claude Code</option>
+              <option value="copilot">GitHub Copilot</option>
+            </select>
+            {agent === "copilot" && (
+              <p className="text-xs text-muted-foreground">
+                Copilot sessions are headless — monitor via dashboard
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <label htmlFor="recruit-workdir" className="text-sm font-medium">
