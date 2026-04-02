@@ -92,7 +92,8 @@ export async function sendMessage(
   if (!handle) {
     throw new Error(`Player "${playerId}" not found in ensemble "${ensemble}"`);
   }
-  await handle.signal(receiveMessageSignal, { from, text });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- isMaestro not yet in upstream types
+  await handle.signal(receiveMessageSignal, { from, text, isMaestro: true } as any);
 }
 
 export async function terminatePlayer(
@@ -214,7 +215,8 @@ export async function sendAsMaestro(
   if (!targetHandle) {
     throw new Error(`Player "${targetPlayerId}" not found`);
   }
-  await targetHandle.signal(receiveMessageSignal, { from: 'maestro', text });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- isMaestro not yet in upstream types
+  await targetHandle.signal(receiveMessageSignal, { from: 'maestro', text, isMaestro: true } as any);
 
   // Record outbound on maestro's workflow
   const maestroId = sessionWorkflowId(ensemble, 'maestro');
@@ -346,7 +348,8 @@ export async function recruitPlayer(
     ? `${nameInstruction}\n\nThen: ${initialMessage}`
     : nameInstruction;
 
-  await newHandle.signal(receiveMessageSignal, { from: 'maestro', text: fullMessage });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- isMaestro not yet in upstream types
+  await newHandle.signal(receiveMessageSignal, { from: 'maestro', text: fullMessage, isMaestro: true } as any);
 
   // Notify conductor that maestro recruited a new player
   if (!isConductor) {
@@ -355,10 +358,13 @@ export async function recruitPlayer(
       const conductorHandle = await resolveSession(client, ensemble, conductor);
       if (conductorHandle) {
         try {
+          /* eslint-disable @typescript-eslint/no-explicit-any -- isMaestro not yet in upstream types */
           await conductorHandle.signal(receiveMessageSignal, {
             from: 'maestro',
             text: `Recruited new player "${name}" in ${workDir}.${initialMessage ? ` Task: ${initialMessage}` : ''}`,
-          });
+            isMaestro: true,
+          } as any);
+          /* eslint-enable @typescript-eslint/no-explicit-any */
         } catch {
           // Conductor may not be accepting messages
         }
